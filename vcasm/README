@@ -1,0 +1,25 @@
+Assembler for the VideoCore IV processor.
+I have tested this with MinGW but it should work on any UN*X compatible system with standard dev tools (gcc, flex, bison).
+
+See here for documentation on the instruction set:
+https://github.com/hermanhermitage/videocoreiv/wiki/VideoCore-IV-Programmers-Manual
+
+This assembler is quite basic - I plan to add support for vector and some other instructions soon, hopefully.
+TODO:
+- Vector instructions
+- Conditional instructions: addne r0, r1
+- addcmpbne ...
+- bne r0, r1, LABEL
+- long jumps/branches
+- other instructions as they are figured out.
+
+I hope this assembler will simply be a temporary development tool, and that we can eventually add VideoCore support to binutils, LLVM/gcc, etc.
+
+
+Releasing under the GPLv2 as it contains some Linux kernel source, as well as some code from Jon Povey's DCPU-16 assembler:
+https://github.com/jonpovey/das
+
+The affected files are:
+list.h
+expression.h
+expression.c

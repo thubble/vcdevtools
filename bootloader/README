@@ -1,0 +1,21 @@
+Bootloader for the Raspberry Pi.
+
+1. Compile .S files with the vcasm assembler in this same repository.
+vcasm -o loader.bin bootloader.S
+vcasm -o prog.bin bootcode_test.S
+
+2. Put loader.bin on a working SD card, with the bootcode.bin from an older firmware (from before they got rid of loader.bin).
+
+3. Use the attached C#/.Net serial program (TestSerialPort.cs), or write your own (protocol is described in the comments of the C# file).
+
+Simply send the compiled bytecode from "prog.bin" (or your own) over the serial port using the described protocol.
+Then see what data comes back.
+
+To write your own program, just use the following conventions, and compile with vcasm:
+1. Don't pad the beginning 512 bytes with 0's as is done with bootcode.bin/loader.bin - just compile raw bytecode.
+2. At entry, r0 will contain an address to write arbitrary data to.
+3. Before returning, set r0 equal to the # of bytes you've written.
+The bootloader will execute your program and send back whatever data you tell it to.
+
+NOTE: You have to reset the Pi (unplug it) after every use of the bootloader. This is due to some sort of instruction caching, where writing code to the same address twice won't overwrite the original (so the same code will execute every time).
+Please feel free to try to fix this!
