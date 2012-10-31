@@ -187,6 +187,10 @@ struct operand* create_ldstoperand_gpreggpregoffset(int gpreg, int gpreg2)
 
 struct operand* create_ppoperand_gpregrange(int gpreg, int gpreg2)
 {
+    if(gpreg != 0 && gpreg != 6 && gpreg != 16 && gpreg != 24) {
+        return NULL;
+    }
+
 	struct operand* opd = calloc(1, sizeof(struct operand));
 	
 	opd->type = OPD_GPREG_RANGE;

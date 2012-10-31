@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <assert.h>
 
 #include "emit.h"
 #include "insns.h"
@@ -324,22 +325,33 @@ void emit_pushpop(struct operation* op, unsigned char* output_buffer)
 	unsigned char* dest = output_buffer + op->at_pc;
 	
 	// NOT SUPPORTED YET
-	if (op->n_operands != 2)
+	if (op->n_operands != 2 && op->n_operands != 1)
 		return;
 	struct operand* opA = op->operands[0];
-	struct operand* opB = op->operands[1];
 	
-	// NOT SUPPORTED YET
-	if (opB->type != OPD_LRPC)
+	if (opA->type != OPD_GPREG_RANGE)
 		return;
-	if (opA->type != OPD_GPREG || opA->gpreg != 6)
-		return;
+
+    // r0 = 0, r6 = 1, r16 = 2, r24 = 3. All other starting registers invalid.
+    static char starts[32] = {0, 8, 8, 8, 8, 8, 1, 8,
+                              8, 8, 8, 8, 8, 8, 8, 8,
+                              2, 8, 8, 8, 8, 8, 8, 8,
+                              3, 8, 8, 8, 8, 8, 8, 8};
+    uint8_t start = starts[opA->gpreg];
+    uint8_t count = (opA->gpreg2 - opA->gpreg) % 32;
+    assert(start != 8);
+    start = start << 5;
 	
 	// 0000 0011 1010 0000  "push r6, lr"
 	// 0000 0011 0010 0000  "pop  r6, pc"
-	uint16_t val = 0x0320;
+	uint16_t val = 0x0200 | start | count;
 	if (op->opcode == OP_PUSH)
 		val |= 0x0080;
+    if (op->n_operands == 2) {
+        struct operand* opB = op->operands[1];
+        if (opB->type != OPD_LRPC) return;
+        val |= 0x0100;
+    }
 	
 	emit16(dest, val);
 }

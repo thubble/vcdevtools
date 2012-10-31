@@ -101,8 +101,15 @@ ldstoperand:
 	;
 	
 ppoperand:
-	GPREG '-' GPREG			{ $$ = (struct operand*)create_ppoperand_gpregrange($1, $3); }
-	| gpregoperand
+	GPREG '-' GPREG			{ $$ = (struct operand*)create_ppoperand_gpregrange($1, $3); 
+                              if ($$ == NULL) { 
+            yyerror("Invalid push/pop register range. Must start with r0, r6, r16 or r24"); YYERROR; }
+                            }
+	| GPREG                 { $$ = (struct operand*)create_ppoperand_gpregrange($1, $1); 
+                               if ($$ == NULL) { 
+            yyerror("Invalid push/pop register. Must be r0, r6, r16 or r24"); YYERROR; }
+                            }
+
 	;
 	
 intdatlist:
