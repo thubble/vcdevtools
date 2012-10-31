@@ -226,10 +226,8 @@ struct operand* create_strdatoperand(char* str)
 	struct operand* opd = calloc(1, sizeof(struct operand));
 	
 	opd->type = OPD_STRDAT;
-	opd->constval = strlen(str) - 2;
-	opd->strval = malloc(opd->constval + 1);
-	strncpy(opd->strval, str+1, opd->constval);
-	opd->strval[opd->constval] = '\0';
+	opd->constval = strlen(str) + 1; // Don't forget the null byte the on end.
+	opd->strval = str;
 	
 	return opd;
 }

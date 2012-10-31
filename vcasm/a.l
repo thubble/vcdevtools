@@ -7,6 +7,28 @@
 #include "insns.h"
 
 void yyerror(char *s, ...);
+
+char *buffer;
+int bufferLen;
+int contentLen;
+
+AppendString(char *str, int size) {
+    if(!buffer || (contentLen + size) > bufferLen) {
+        bufferLen = contentLen + size + 8;
+        buffer = realloc(buffer, bufferLen);
+    }
+    memcpy(buffer + contentLen, str, size);
+    contentLen += size;
+}
+
+AppendChar(char chr, int minAlloc) {
+    if(!buffer || (contentLen + 1) > bufferLen) {
+        bufferLen = contentLen + minAlloc;
+        buffer = realloc(buffer, bufferLen);
+    }
+    buffer[contentLen++] = chr;
+}
+
 %}
 
 %option yylineno
@@ -27,6 +49,7 @@ lrpc			lr|pc
 symfirstchar	{letter}|[_]
 symbolname		{symfirstchar}({symfirstchar}|{digit})*
 
+%x ESCstr
 
 %%
 
@@ -90,7 +113,23 @@ cpuid			{ return CPUID; }
 				}
 0x{hexdigit}+	{ yylval.integer = (int)strtoul(yytext, NULL, 16); return CONSTANT; }
 {digit}+		{ yylval.integer = atoi(yytext); return CONSTANT; }
-\"(\\.|[^\\"])*\"	{ yylval.string = yytext; return STRING; }
+
+
+
+\"              { BEGIN ESCstr; contentLen = 0; bufferLen = 0; buffer = NULL; }
+<ESCstr>[^\\"\n]* { AppendString(yytext, yyleng); }
+<ESCstr>\\r     { AppendChar('\r', 4); }
+<ESCstr>\\n     { AppendChar('\n', 4); }
+<ESCstr>\\t     { AppendChar('\t', 16); }
+<ESCstr>\\[\\"] { AppendChar(yytext[1], 4); }
+<ESCstr>\"	    { AppendChar('\0', 1);
+                  if(contentLen < bufferLen - 0x10) /* Save space if buffer is oversized */
+                      buffer = realloc(buffer, contentLen+1);
+                  yylval.string = buffer; BEGIN 0; return STRING; 
+                }
+<ESCstr>\\.     { error("bogus escape '%s' in string\n", yytext); }
+<ESCstr>\n      { error("newline in string\n"); }
+
 \<\<			return LSHIFT;
 \>\>			return RSHIFT;
 [-,+*/|&^()~\[\]\n]			{ return *yytext; }
