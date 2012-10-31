@@ -7,6 +7,11 @@
 #include "emit.h"
 #include "insns.h"
 
+void abort_emit(char *reason) {
+    fprintf(stderr, "Aborting emit: %s\n", reason);
+    exit(1);
+}
+
 extern struct list_head opslist;
 
 typedef void (*op_emit)(struct operation* op, unsigned char* output_buffer);
@@ -227,7 +232,7 @@ static int32_t get_pc_offset_div2(struct operand* target, struct operation* op)
 void emit_gen(struct operation* op, unsigned char* output_buffer)
 {
 	if (op->condcode != COND_ALWAYS)
-		return; // NOT SUPPORTED YET
+		abort_emit("Condition Code not supported yet"); // NOT SUPPORTED YET
 	
 	unsigned char* dest = output_buffer + op->at_pc;
 	
@@ -292,6 +297,7 @@ void emit_gen(struct operation* op, unsigned char* output_buffer)
 	
 	/* triadic instructions are always 32-bit */
 	// NOT SUPPORTED YET
+    abort_emit("Unsupported triadic instruction");
 }
 
 void emit_ldst(struct operation* op, unsigned char* output_buffer)
@@ -318,13 +324,13 @@ void emit_ldst(struct operation* op, unsigned char* output_buffer)
 	}
 	
 	/* OTHER FORMATS NOT SUPPORTED YET */
+    abort_emit("Unsupported load/store instruction");
 }
 
 void emit_pushpop(struct operation* op, unsigned char* output_buffer)
 {
 	unsigned char* dest = output_buffer + op->at_pc;
 	
-	// NOT SUPPORTED YET
 	if (op->n_operands != 2 && op->n_operands != 1)
 		return;
 	struct operand* opA = op->operands[0];
@@ -364,8 +370,7 @@ void emit_misc(struct operation* op, unsigned char* output_buffer)
 	switch(op->opcode)
 	{
 	case OP_BL:
-		if (op->n_operands != 1)
-			return; /* NOT SUPPORTED YET */
+		assert(op->n_operands == 1);
 		opA = op->operands[0];
 		if (opA->type == OPD_GPREG)
 		{
@@ -388,7 +393,7 @@ void emit_misc(struct operation* op, unsigned char* output_buffer)
 		
 	case OP_B:
 		if (op->n_operands != 1)
-			return; /* NOT SUPPORTED YET */
+			abort_emit("Unsupported Branch Instruction (more than 1 operands)"); /* NOT SUPPORTED YET */
 		opA = op->operands[0];
 		if (op->operands[0]->type == OPD_GPREG)
 		{
@@ -424,11 +429,9 @@ void emit_misc(struct operation* op, unsigned char* output_buffer)
 		return;
 		
 	case OP_LEA:
-		if (op->n_operands != 2)
-			return; /* NOT SUPPORTED */
+		assert(op->n_operands == 2);
 		opA = op->operands[0];
-		if (opA->type != OPD_GPREG)
-			return; /* NOT SUPPORTED */
+		assert(opA->type == OPD_GPREG);
 		struct operand* opB = op->operands[1];
 		
 		// 1110 0101 000d dddd oooo oooo oooo oooo oooo oooo oooo oooo  "lea r%i{d}, 0x%08x{$+o}"
@@ -557,6 +560,7 @@ int getlen_ldst(struct operation* op)
 		return 2;
 	
 	/* NOT SUPPORTED YET */
+    abort_emit("Unsupported load/store instruction");
 	return 0;
 }
 
