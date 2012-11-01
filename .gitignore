@@ -11,6 +11,12 @@
 *.la
 *.a
 
+# flex/bison files
+lex.yy.c
+*.tab.c
+*.tab.h
+*.output
+
 #Compiled exe
-vcasm
+vcasm/vcasm
 *.exe
