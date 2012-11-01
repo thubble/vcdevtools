@@ -7,6 +7,9 @@
 #include "emit.h"
 #include "insns.h"
 
+#define FITS_IN_UNSIGNED(bits, x) (((unsigned int)x) < (1 << bits))
+#define FITS_IN_SIGNED(bits, x) (x < (1 << (bits-1)) && x >= -(1 << bits))
+
 void abort_emit(char *reason) {
     fprintf(stderr, "Aborting emit: %s\n", reason);
     exit(1);
@@ -307,8 +310,9 @@ void emit_ldst(struct operation* op, unsigned char* output_buffer)
 	struct operand* opd_reg = op->operands[0];
 	struct operand* opd_mem = op->operands[1];
 	
-	if (op->condcode == COND_ALWAYS && opd_mem->type == OPD_ADDR_GPREG)
-	{
+    // TODO: check for post increment first.
+	if (op->condcode == COND_ALWAYS && opd_mem->type == OPD_ADDR_GPREG && 
+            opd_mem->gpreg < 16 && opd_reg->gpreg < 16) {
 		//0000 1ww0 ssss dddd "ld%s{w} r%i{d}, (r%i{s})"
 		//0000 1ww1 ssss dddd "st%s{w} r%i{d}, (r%i{s})"
 
@@ -322,6 +326,60 @@ void emit_ldst(struct operation* op, unsigned char* output_buffer)
 		emit16(dest, val);
 		return;
 	}
+
+    if ((opd_mem->type == OPD_ADDR_GPREG || opd_mem->type == OPD_ADDR_GPREG_CONSTOFFSET)) {
+        int offset = opd_mem->constval;
+        if (op->condcode == COND_ALWAYS && FITS_IN_UNSIGNED(4, offset/4) && offset % 4 == 0 &&
+                opd_mem->gpreg < 16 && opd_reg->gpreg < 16 && op->memsize == SIZE_W) {
+            // 0010 uuuu ssss dddd "ld  r%i{d}, 0x%02x{u*4}(r%i{s})"
+            // 0011 uuuu ssss dddd "st  r%i{d}, 0x%02x{u*4}(r%i{s})"
+
+            uint16_t val = 0x2000;
+            val |= (opd_mem->gpreg & 0xf) << 4; // s
+            val |= (opd_reg->gpreg & 0xf);      // d
+            val |= offset/4 << 8;               // u
+            if (op->opcode == OP_ST)
+    			val |= 0x1 << 12;
+
+            emit16(dest, val);
+    		return;
+        }
+
+        if (op->condcode == COND_ALWAYS && FITS_IN_SIGNED(12, offset)) {
+            // 1010 001o ww0d dddd ssss sooo oooo oooo "ld%s{w} r%i{d}, 0x%x{o}(r%i{s})"
+            // 1010 001o ww1d dddd ssss sooo oooo oooo "st%s{w} r%i{d}, 0x%x{o}(r%i{s})"
+
+            uint32_t val = 0xa2000000;
+            val |= get_bit_width_flags(op->memsize) << 22; // w
+            val |= opd_mem->gpreg << 11;            // s
+            val |= opd_reg->gpreg << 16;            // d
+            val |= offset & 0x7ff;       // offset bits 10:0
+            val |= (offset < 0) << 24;   // offset sign bit.
+            if (op->opcode == OP_ST)
+    			val |= 0x1 << 21;
+
+            emit32(dest, val);
+    		return;
+        }
+    }
+
+
+    if(opd_mem->type == OPD_ADDR_GPREG_GPREGOFFSET) {
+        //1010 0000 ww0d dddd aaaa accc c00b bbbb   "ld%s{w}%s{c} r%i{d}, (r%i{a}, r%i{b})"
+        //1010 0000 ww1d dddd aaaa accc c00b bbbb   "st%s{w}%s{c} r%i{d}, (r%i{a}, r%i{b})"
+        
+        uint32_t val = 0xa0000000;
+        val |= get_bit_width_flags(op->memsize) << 22; // w
+        val |= opd_mem->gpreg << 11;    // a
+        val |= opd_mem->gpreg2;         // b
+        val |= opd_reg->gpreg << 16;    // d
+        val |= get_condcode_fullsize(op->condcode) << 7; // c
+        if (op->opcode == OP_ST)
+			val |= 0x1 << 21;
+
+        emit32(dest, val);
+		return;
+    }
 	
 	/* OTHER FORMATS NOT SUPPORTED YET */
     abort_emit("Unsupported load/store instruction");
@@ -554,10 +612,44 @@ int getlen_gen(struct operation* op)
 
 int getlen_ldst(struct operation* op)
 {
+    struct operand* opd_dst = op->operands[0];
 	struct operand* opd_mem = op->operands[1];
 	
-	if (op->condcode == COND_ALWAYS && opd_mem->type == OPD_ADDR_GPREG)
-		return 2;
+    if (opd_mem->type == OPD_ADDR_GPREG) {
+        // 0000 1ww_ ssss dddd 
+        if (op->condcode == COND_ALWAYS && opd_dst->gpreg < 16 && opd_mem->gpreg < 16) 
+            return 2;
+        /* Not yet implemented in emit
+        // 0000 01_0 0000 dddd - special offset to stack pointer mode
+        //if (op->condcode == COND_ALWAYS && opd_dst->gpreg == 24 && op->memsize == SIZE_W)
+        //    return 2;
+        */
+
+    }
+
+    if (opd_mem->type == OPD_ADDR_GPREG_CONSTOFFSET || opd_mem->type == OPD_ADDR_GPREG) {
+        int offset = opd_mem->constval;
+        /* Not yet implemented in emit
+        // 0000 01_o oooo dddd - offset to stack pointer
+        if(op->condcode == COND_ALWAYS && opd_mem->gpreg == 24 && opd_dst->gpreg < 16 
+                && op->memsize == SIZE_W && FITS_IN_SIGNED(5, offset/4) && offset % 4 == 0)
+            return 2;
+        */
+
+        // 001_ uuuu ssss dddd
+        if(op->condcode == COND_ALWAYS && opd_mem->gpreg < 16 && opd_dst->gpreg < 16 &&
+                op->memsize == SIZE_W && FITS_IN_UNSIGNED(4, offset/4) && offset % 4 == 0 )
+            return 2;
+        // 1010 0000 ww_d dddd aaaa accc c10o oooo
+            // Not implemented
+        // 1010 001o ww_d dddd ssss sooo oooo oooo - 12 bit offset.
+        if(op->condcode == COND_ALWAYS && FITS_IN_SIGNED(12, offset))
+            return 4;
+    }
+
+    // 1010 0000 ww_d dddd aaaa accc c00b bbbb
+    if (opd_mem->type == OPD_ADDR_GPREG_GPREGOFFSET)
+		return 4;
 	
 	/* NOT SUPPORTED YET */
     abort_emit("Unsupported load/store instruction");

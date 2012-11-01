@@ -159,7 +159,8 @@ struct operand* create_ldstoperand_gpreg(int gpreg)
 	
 	opd->type = OPD_ADDR_GPREG;
 	opd->gpreg = gpreg;
-	
+    opd->constval = 0; /* Code might later treat OPD_ADDR_GPREG the same as 
+                          OPD_ADDR_GPREG_CONSTOFFSET with a zero offset. */
 	return opd;
 }
 

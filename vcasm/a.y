@@ -96,7 +96,7 @@ operand:
 	
 ldstoperand:
 	'(' GPREG ')'				{ $$ = (struct operand*)create_ldstoperand_gpreg($2); }
-	| CONSTANT '(' GPREG ')'	{ $$ = (struct operand*)create_ldstoperand_gpregconstoffset($3, $1); }
+	| expr '(' GPREG ')'	{ $$ = (struct operand*)create_ldstoperand_gpregconstoffset($3, expr_value($1)); }
 	| '(' GPREG ',' GPREG ')'	{ $$ = (struct operand*)create_ldstoperand_gpreggpregoffset($2, $4); }
 	;
 	
