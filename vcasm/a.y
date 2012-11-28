@@ -64,8 +64,8 @@ statement:
 	;
 	
 instr:
-	GENOPCODE operand ',' operand ',' operand		{ geninsn3($1, $2, $4, $6); }
-	| GENOPCODE operand ',' operand					{ geninsn2($1, $2, $4); }
+	GENOPCODE gpregoperand ',' gpregoperand ',' operand		{ geninsn3($1, $2, $4, $6); }
+	| GENOPCODE gpregoperand ',' operand					{ geninsn2($1, $2, $4); }
 	| GENOPCODE operand		{ geninsn1($1, $2); }
 	| GENOPCODE				{ geninsn0($1); }
 	| BLOPCODE operand		{ geninsnmisc($1, $2); }

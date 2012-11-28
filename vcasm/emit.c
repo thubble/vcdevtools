@@ -241,6 +241,7 @@ void emit_gen(struct operation* op, unsigned char* output_buffer)
 	
 	struct operand* opD = op->operands[0];
 	struct operand* opA = op->operands[1];
+    struct operand* opB = op->operands[2];
 	
 	if (op->n_operands == 2)
 	{
@@ -255,7 +256,7 @@ void emit_gen(struct operation* op, unsigned char* output_buffer)
 			emit16(dest, val);
 			return;
 		}
-		if (op->condcode == COND_ALWAYS && opA->type == OPD_GPREG)
+		if (op->condcode == COND_ALWAYS && opA->type == OPD_GPREG && opA->gpreg < 16 && opD->gpreg < 16)
 		{
 			// 010p pppp ssss dddd  "%s{p} r%i{d}, r%i{s}"
 			uint16_t val = 0x1 << 14;
@@ -296,9 +297,40 @@ void emit_gen(struct operation* op, unsigned char* output_buffer)
 			emit48(dest, val1, (uint32_t)constval);
 			return;
 		}
+
+        // We are falling through to the triadic instructions, re-arrange our opperands:
+        opB = opA;
+        opA = opD;
 	}
 	
 	/* triadic instructions are always 32-bit */
+    
+    if (opB->type == OPD_GPREG) {
+        // 1100 00pp pppd dddd aaaa accc c00b bbbb
+        uint32_t val = 0xc0000000;
+        val |= get_gen_opcode_fullsize(op->opcode) << 21;
+        val |= (opD->gpreg & 0x1F) << 16;
+        val |= (opA->gpreg & 0x1F) << 11;
+        val |= get_condcode_fullsize(op->condcode) << 7;
+        val |= (opB->gpreg & 0x1F) << 0;
+
+        emit32(dest, val);
+        return;
+    }
+    
+    if (opB->type == OPD_CONST && FITS_IN_UNSIGNED(6, opB->constval)) {
+        // 1100 00pp pppd dddd aaaa accc c00b bbbb
+        uint32_t val = 0xc0000040;
+        val |= get_gen_opcode_fullsize(op->opcode) << 21;
+        val |= (opD->gpreg & 0x1F) << 16;
+        val |= (opA->gpreg & 0x1F) << 11;
+        val |= get_condcode_fullsize(op->condcode) << 7;
+        val |= (opB->constval & 0x1F) << 0;
+
+        emit32(dest, val);
+        return;
+    }
+                                                                                         
 	// NOT SUPPORTED YET
     abort_emit("Unsupported triadic instruction");
 }
@@ -589,7 +621,7 @@ int getlen_gen(struct operation* op)
 	{
 		if (opA->type == OPD_CPUID)
 			return 2;
-		if (op->condcode == COND_ALWAYS && opA->type == OPD_GPREG)
+		if (op->condcode == COND_ALWAYS && opA->type == OPD_GPREG && opA->gpreg < 16 && opD->gpreg < 16)
 			return 2;
 		if (opA->type == OPD_CONST || opA->type == OPD_SYMREF)
 		{
