@@ -164,6 +164,22 @@ struct operand* create_ldstoperand_gpreg(int gpreg)
 	return opd;
 }
 
+struct operand* create_ldstoperand_gpreg_inc(int gpreg) {
+	struct operand* opd = calloc(1, sizeof(struct operand));
+	
+	opd->type = OPD_ADDR_GPREG_INC;
+	opd->gpreg = gpreg;
+	return opd;
+}
+
+struct operand* create_ldstoperand_gpreg_dec(int gpreg) {
+	struct operand* opd = calloc(1, sizeof(struct operand));
+	
+	opd->type = OPD_ADDR_GPREG_DEC;
+	opd->gpreg = gpreg;
+	return opd;
+}
+
 struct operand* create_ldstoperand_gpregconstoffset(int gpreg, int constoffset)
 {
 	struct operand* opd = calloc(1, sizeof(struct operand));
@@ -378,7 +394,6 @@ void geninsnldst(int opc, struct operand* reg, struct operand* mem)
 	cur_pc += insnlen(op);
 	list_add_tail(&op->list, &opslist);
 }
-
 
 void geninsnlea(struct operand* reg, struct operand* offset)
 {

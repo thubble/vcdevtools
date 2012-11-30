@@ -93,9 +93,11 @@ operand:
 	| exprnosym				{ $$ = (struct operand*)create_operand_const(expr_value($1)); }
 	| CPUID					{ $$ = (struct operand*)create_operand_cpuid(); }
 	;
-	
+
 ldstoperand:
 	'(' GPREG ')'				{ $$ = (struct operand*)create_ldstoperand_gpreg($2); }
+    | '(' GPREG ')'	'+' '+'		{ $$ = (struct operand*)create_ldstoperand_gpreg_inc($2); }
+    | '-' '-' '(' GPREG ')'		{ $$ = (struct operand*)create_ldstoperand_gpreg_dec($4); }
 	| expr '(' GPREG ')'	{ $$ = (struct operand*)create_ldstoperand_gpregconstoffset($3, expr_value($1)); }
 	| '(' GPREG ',' GPREG ')'	{ $$ = (struct operand*)create_ldstoperand_gpreggpregoffset($2, $4); }
 	;

@@ -342,7 +342,6 @@ void emit_ldst(struct operation* op, unsigned char* output_buffer)
 	struct operand* opd_reg = op->operands[0];
 	struct operand* opd_mem = op->operands[1];
 	
-    // TODO: check for post increment first.
 	if (op->condcode == COND_ALWAYS && opd_mem->type == OPD_ADDR_GPREG && 
             opd_mem->gpreg < 16 && opd_reg->gpreg < 16) {
 		//0000 1ww0 ssss dddd "ld%s{w} r%i{d}, (r%i{s})"
@@ -404,6 +403,23 @@ void emit_ldst(struct operation* op, unsigned char* output_buffer)
         val |= get_bit_width_flags(op->memsize) << 22; // w
         val |= opd_mem->gpreg << 11;    // a
         val |= opd_mem->gpreg2;         // b
+        val |= opd_reg->gpreg << 16;    // d
+        val |= get_condcode_fullsize(op->condcode) << 7; // c
+        if (op->opcode == OP_ST)
+			val |= 0x1 << 21;
+
+        emit32(dest, val);
+		return;
+    }
+
+    if(opd_mem->type == OPD_ADDR_GPREG_INC || opd_mem->type == OPD_ADDR_GPREG_DEC) {
+        //1010 0100 ww1d dddd ssss sccc c000 0000   "; st%s{w}%s{c} r%i{d}, --(r%i{s})" 
+        //1010 0101 ww0d dddd ssss sccc c000 0000   "; ld%s{w}%s{c} r%i{d}, (r%i{s})++"
+        
+        uint32_t val = 0xa4000000;
+        if(opd_mem->type == OPD_ADDR_GPREG_INC) val |= 0x01000000; // increment/decrement
+        val |= get_bit_width_flags(op->memsize) << 22; // w
+        val |= opd_mem->gpreg << 11;    // a
         val |= opd_reg->gpreg << 16;    // d
         val |= get_condcode_fullsize(op->condcode) << 7; // c
         if (op->opcode == OP_ST)
@@ -682,6 +698,10 @@ int getlen_ldst(struct operation* op)
     // 1010 0000 ww_d dddd aaaa accc c00b bbbb
     if (opd_mem->type == OPD_ADDR_GPREG_GPREGOFFSET)
 		return 4;
+
+    // Increment/Deincrement
+    if(opd_mem->type == OPD_ADDR_GPREG_INC || opd_mem->type == OPD_ADDR_GPREG_DEC) 
+        return 4;
 	
 	/* NOT SUPPORTED YET */
     abort_emit("Unsupported load/store instruction");
