@@ -546,6 +546,45 @@ void emit_misc(struct operation* op, unsigned char* output_buffer)
 		
 		emit48(dest, val1, get_pc_offset(opB, op));
 		return;
+    case OP_ADDCMPB:
+        // 1000 cccc aaaa dddd 00ss ssoo oooo oooo  "addcmpb%s{c} r%i{d}, r%i{a}, r%i{s}, 0x%08x{$+o*2}"
+        // 1000 cccc iiii dddd 01ss ssoo oooo oooo  "addcmpb%s{c} r%i{d}, #%i{i}, r%i{s}, 0x%08x{$+o*2}"
+        // 1000 cccc aaaa dddd 10uu uuuu oooo oooo  "addcmpb%s{c} r%i{d}, r%i{a}, #%i{u}, 0x%08x{$+o*2}"
+        // 1000 cccc iiii dddd 11uu uuuu oooo oooo  "addcmpb%s{c} r%i{d}, #%i{i}, #%i{u}, 0x%08x{$+o*2}"
+        
+        assert(op->n_operands == 4);
+        struct operand* counter = op->operands[0];
+        struct operand* value = op->operands[1];
+        struct operand* limit = op->operands[2];
+        struct operand* offset = op->operands[3];
+
+        uint32_t val = 0x80000000;
+        val |= get_condcode_fullsize(op->condcode) << 24;
+        if(value->type == OPD_GPREG) {
+            assert(value->gpreg < 16);
+            val |= value->gpreg << 20;
+        } else if (value->type == OPD_CONST && FITS_IN_SIGNED(4, value->constval)) {
+            val |= (value->constval & 0xF) << 20;
+            val |= 0x4000;
+        } else abort_emit("2nd AddCmpB operand too large");
+        assert(counter->type == OPD_GPREG);
+        val |= counter->gpreg << 16;
+        if(limit->type == OPD_GPREG) {
+            assert(limit->gpreg < 16);
+            val |= limit->gpreg << 10;
+            int off = get_pc_offset_div2(offset, op);
+            assert(FITS_IN_SIGNED(12, off));
+            val |= off & 0x3ff;
+        } else if (limit->type == OPD_CONST && FITS_IN_UNSIGNED(6, limit->constval)) {
+            val |= (limit->constval & 0x3f) << 8;
+            int off = get_pc_offset_div2(offset, op);
+            assert(FITS_IN_SIGNED(8, off));
+            val |= off & 0xff;
+            val |= 0x8000;
+        } else abort_emit("3rd AddCmpB operand too large");
+
+        emit32(dest, val);
+        return;
 	}
 }
 
@@ -729,6 +768,8 @@ int getlen_misc(struct operation* op)
 		return 2;
 	case OP_LEA:
 		return 6;
+    case OP_ADDCMPB:
+        return 4;
 	}
 }
 

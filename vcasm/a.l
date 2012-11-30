@@ -89,6 +89,10 @@ b				{
 					yylval.integer = str2opcode(yytext) | (COND_ALWAYS << 16);
 					return BCHOPCODE;
 				}
+addcmpb{cond}   {
+                    yylval.integer = str2opcodecond(yytext);
+                    return ABCOPCODE;
+                }
 rts				{ 
 					yylval.integer = OP_B | (COND_ALWAYS << 16); /* b rl (rl==r26) */
 					return RTSOPCODE;

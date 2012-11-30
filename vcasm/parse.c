@@ -335,6 +335,29 @@ void geninsn3(int opc, struct operand* opA, struct operand* opB, struct operand*
 	list_add_tail(&op->list, &opslist);
 }
 
+void genmiscinsn4(int opc, struct operand* opA, struct operand* opB, struct operand* opC, struct operand* opD)
+{
+	int cond = (opc >> 16) & 0x0000FFFF;
+	opc &= 0x0000FFFF;
+	
+	struct operation* op = calloc(1, sizeof(*op));
+	
+	op->optype = OPTYPE_MISC;
+	op->opcode = opc;
+	op->condcode = cond;
+	op->at_pc = cur_pc;
+	
+	op->n_operands = 4;
+	op->operands = calloc(4, sizeof(struct operand*));
+	op->operands[0] = opA;
+	op->operands[1] = opB;
+	op->operands[2] = opC;
+    op->operands[3] = opD;
+	
+	cur_pc += insnlen(op);
+	list_add_tail(&op->list, &opslist);
+}
+
 
 void geninsnmisc(int opc, struct operand* opA)
 {

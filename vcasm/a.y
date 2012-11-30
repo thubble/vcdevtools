@@ -19,7 +19,7 @@ int yylex(void);
 %token <integer> LSHIFT RSHIFT
 %token <integer> GPREG LRPC CPUID
 %token <integer> CONSTANT
-%token <integer> GENOPCODE LDSTOPCODE PPOPCODE BLOPCODE BCHOPCODE RTSOPCODE NOPOPCODE LEAOPCODE
+%token <integer> GENOPCODE LDSTOPCODE PPOPCODE BLOPCODE BCHOPCODE ABCOPCODE RTSOPCODE NOPOPCODE LEAOPCODE
 %token <integer> DIR_EQU DIR_SPACE DIR_STRING DIR_INTDAT
 
 %type <expr> expr exprnosym
@@ -70,6 +70,7 @@ instr:
 	| GENOPCODE				{ geninsn0($1); }
 	| BLOPCODE operand		{ geninsnmisc($1, $2); }
 	| BCHOPCODE operand		{ geninsnmisc($1, $2); }
+    | ABCOPCODE gpregoperand ',' operand ',' operand ',' operand	{ genmiscinsn4($1, $2, $4, $6, $8); }
 	| RTSOPCODE				{ geninsnmisc(OP_B | (COND_ALWAYS << 16), create_operand_gpreg(26)); /* b rl (rl==r26) */ }
 	| NOPOPCODE				{ geninsnnop(); }
 	| LEAOPCODE gpregoperand ',' exprnosym			{ geninsnlea($2, (struct operand*)create_operand_const(expr_value($4))); }
