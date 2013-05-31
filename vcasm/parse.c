@@ -113,6 +113,41 @@ int str2sizecode(char* str)
 	return SIZE_W;
 }
 
+int str2vecop(char* str)
+{
+	int vecop = 0x00000000;
+	if (str[0] == 'V')
+		vecop |= 0x00010000; /* bit 16: vertical */
+	
+	if (strlen(str) == 1)
+		vecop |= 0x08; /* 8-bit */
+	else if (str[1] == 'X')
+		vecop |= 0x10; /* 16-bit */
+	else if (str[1] == 'Y')
+		vecop |= 0x20; /* 32-bit */
+	
+	return vecop;
+}
+
+int str2vecldstopcode(char* str, int is_st)
+{
+	int vecldstop = 0x00000000;
+	
+	if (is_st)
+		vecldstop |= 0x00010000; /* bit 16: store */
+	
+	if (strlen(str) < 4)
+		vecldstop |= 0x20; /* 32-bit */
+	else if (str[3] == 'w')
+		vecldstop |= 0x20; /* 32-bit */
+	else if (str[3] == 'h')
+		vecldstop |= 0x10; /* 16-bit */
+	else if (str[3] == 'b')
+		vecldstop |= 0x08; /* 8-bit */
+	
+	return vecldstop;
+}
+
 
 struct operand* create_operand_gpreg(int gpreg)
 {
@@ -202,6 +237,23 @@ struct operand* create_ldstoperand_gpreggpregoffset(int gpreg, int gpreg2)
 	return opd;
 }
 
+struct operand* create_vecldstoperand(int gpreg, int constval, int gpreg2)
+{
+	if (gpreg < 0 || gpreg > 6)
+		return NULL;
+	if (gpreg2 != -1 && (gpreg2 < 0 || gpreg2 > 6))
+		return NULL;
+	
+	struct operand* opd = calloc(1, sizeof(struct operand));
+	
+	opd->type = OPD_VECLDST;
+	opd->gpreg = gpreg;
+	opd->gpreg2 = gpreg2;
+	opd->constval = constval;
+	
+	return opd;
+}
+
 struct operand* create_ppoperand_gpregrange(int gpreg, int gpreg2)
 {
     if(gpreg != 0 && gpreg != 6 && gpreg != 16 && gpreg != 24) {
@@ -222,6 +274,23 @@ struct operand* create_ppoperand_lrpc()
 	struct operand* opd = calloc(1, sizeof(struct operand));
 	
 	opd->type = OPD_LRPC;
+	
+	return opd;
+}
+
+struct operand* create_vecoperand(int vecop, int y, int yinc, int x, int xinc)
+{
+	struct operand* opd = calloc(1, sizeof(struct operand));
+	
+	opd->type = OPD_VECRF;
+	
+	opd->vrf_y = y;
+	opd->vrf_yinc = yinc;
+	opd->vrf_x = x;
+	opd->vrf_xinc = xinc;
+	
+	opd->vrf_bit_size = (vecop & 0x0000FFFF);
+	opd->vrf_is_vertical = ((vecop & 0xFFFF0000) != 0);
 	
 	return opd;
 }
@@ -412,6 +481,24 @@ void geninsnldst(int opc, struct operand* reg, struct operand* mem)
 	op->n_operands = 2;
 	op->operands = calloc(2, sizeof(struct operand*));
 	op->operands[0] = reg;
+	op->operands[1] = mem;
+	
+	cur_pc += insnlen(op);
+	list_add_tail(&op->list, &opslist);
+}
+
+void geninsnvecldst(int vecop, struct operand* vecrf, struct operand* mem)
+{
+	struct operation* op = calloc(1, sizeof(*op));
+	
+	op->optype = OPTYPE_VECLDST;
+	op->vec_is_store = ((vecop & 0xFFFF0000) != 0);
+	op->vec_bit_size = (vecop & 0x0000FFFF);
+	op->at_pc = cur_pc;
+	
+	op->n_operands = 2;
+	op->operands = calloc(2, sizeof(struct operand*));
+	op->operands[0] = vecrf;
 	op->operands[1] = mem;
 	
 	cur_pc += insnlen(op);

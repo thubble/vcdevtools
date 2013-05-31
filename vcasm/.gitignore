@@ -14,3 +14,7 @@
 #Compiled exe
 vcasm
 *.exe
+
+#Output and test files
+*.bin
+*.s

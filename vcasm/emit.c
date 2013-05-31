@@ -23,15 +23,19 @@ void emit_gen(struct operation* op, unsigned char* output_buffer);
 void emit_ldst(struct operation* op, unsigned char* output_buffer);
 void emit_pushpop(struct operation* op, unsigned char* output_buffer);
 void emit_misc(struct operation* op, unsigned char* output_buffer);
+void emit_vecldst(struct operation* op, unsigned char* output_buffer);
+void emit_vec(struct operation* op, unsigned char* output_buffer);
 void emit_space(struct operation* op, unsigned char* output_buffer);
 void emit_dat(struct operation* op, unsigned char* output_buffer);
 
-static op_emit emitters[6] = 
+static op_emit emitters[8] = 
 {
 	emit_gen,
 	emit_ldst,
 	emit_pushpop,
 	emit_misc,
+	emit_vecldst,
+	emit_vec,
 	emit_space,
 	emit_dat
 };
@@ -42,15 +46,19 @@ int getlen_gen(struct operation* op);
 int getlen_ldst(struct operation* op);
 int getlen_pushpop(struct operation* op);
 int getlen_misc(struct operation* op);
+int getlen_vecldst(struct operation* op);
+int getlen_vec(struct operation* op);
 int getlen_space(struct operation* op);
 int getlen_dat(struct operation* op);
 
-static op_getlen lengthgetters[6] = 
+static op_getlen lengthgetters[8] = 
 {
 	getlen_gen,
 	getlen_ldst,
 	getlen_pushpop,
 	getlen_misc,
+	getlen_vecldst,
+	getlen_vec,
 	getlen_space,
 	getlen_dat
 };
@@ -60,6 +68,8 @@ void emit16(unsigned char* dest, uint16_t value);
 void emit32(unsigned char* dest, uint32_t value);
 void emit32_split(unsigned char* dest, uint16_t value1, uint16_t value2);
 void emit48(unsigned char* dest, uint16_t value1, uint32_t value2);
+void emit48_vec(unsigned char* dest, uint16_t value1, uint32_t value2);
+void emit80_vec(unsigned char* dest, uint16_t value1, uint32_t value2, uint32_t value3);
 
 void emit_data(unsigned char* output_buffer)
 {
@@ -588,6 +598,96 @@ void emit_misc(struct operation* op, unsigned char* output_buffer)
 	}
 }
 
+static uint16_t get_vector_operand_bits(struct operand* opd)
+{
+	if (opd->vrf_is_scalar || opd->vrf_is_discard ||
+		opd->vrf_xinc || opd->vrf_yinc)
+	{
+		abort_emit("unsupported vector argument");
+	}
+	if (opd->vrf_bit_size != 32 && opd->vrf_bit_size != 16 && opd->vrf_bit_size != 8)
+		abort_emit("invalid vector argument bit width");
+	
+	int small_offset = opd->vrf_x;
+	int large_offset = opd->vrf_y;
+	if (opd->vrf_is_vertical)
+	{
+		small_offset = opd->vrf_y;
+		large_offset = opd->vrf_x;
+	}
+	if (small_offset != 0 && small_offset != 16 && small_offset != 32 && small_offset != 48)
+		abort_emit("invalid vector argument offset");
+	if (opd->vrf_bit_size >= 16 && (small_offset & 0x1F))
+		abort_emit("invalid vector argument offset");
+	if (opd->vrf_bit_size >= 32 && (small_offset != 0))
+		abort_emit("invalid vector argument offset");
+	if (large_offset < 0 || large_offset > 63)
+		abort_emit("invalid vector argument offset");
+	
+	uint16_t opd_bits = (large_offset & 0x003F);
+	
+	if (opd->vrf_bit_size == 32)
+		opd_bits |= 0x0300;
+	else if (opd->vrf_bit_size == 16)
+		opd_bits |= (0x0200 | ((small_offset >> 5) << 7));
+	else if (opd->vrf_bit_size == 8)
+		opd_bits |= ((small_offset >> 4) << 7);
+	
+	if (opd->vrf_is_vertical)
+		opd_bits |= (1 << 6);
+	
+	return opd_bits;
+}
+
+void emit_vecldst(struct operation* op, unsigned char* output_buffer)
+{
+	if (op->n_operands != 2)
+		abort_emit("invalid vector ld/st instruction");
+	if (op->vec_rep_count != 0)
+		abort_emit("Vector insn repeition is not supported yet.");
+	if (op->vec_bit_size != 32 && op->vec_bit_size != 16 && op->vec_bit_size != 8)
+	{
+		printf ("ERROR: %d\n", op->vec_bit_size);
+		abort_emit("invalid data width for vector ld/st");
+	}
+	
+	struct operand* opVRF = op->operands[0];
+	struct operand* opMem = op->operands[1];
+	
+	if (opVRF->type != OPD_VECRF)
+		abort_emit("invalid VRF operand for vector ld/st");
+	if (opMem->type != OPD_VECLDST || opMem->gpreg2 != -1 || opMem->constval != 0)
+		abort_emit("invalid memory operand for vector ld/st");
+	
+	int bit_size = op->vec_bit_size >> 4;
+	
+	// 1111 0000 000w w000 dddd dddd dd11 1000 0000 0011 1000 0sss  "; Vld [VECTARG48({d}, {0})], (r%i{s})"
+	// 1111 0000 100w w000 1110 0000 00aa aaaa aaaa 0011 1000 0sss  "; Vst [VECTARG48({a}, {0})], (r%i{s})"
+
+	uint16_t top_bits = 0xF000 | (bit_size << 3);
+	uint32_t vec_arg_bits = 0x00000380 | opMem->gpreg;
+	
+	uint16_t vec_op_bits = get_vector_operand_bits(opVRF);
+	if (op->vec_is_store)
+	{
+		top_bits |= (1 << 7);
+		vec_arg_bits |= 0xE0000000;
+		vec_arg_bits |= (vec_op_bits << 12);
+	}
+	else
+	{
+		vec_arg_bits |= 0x00380000;
+		vec_arg_bits |= (vec_op_bits << 22);
+	}
+	
+	emit48_vec(output_buffer + op->at_pc, top_bits, vec_arg_bits);
+}
+
+void emit_vec(struct operation* op, unsigned char* output_buffer)
+{
+	abort_emit("Vector insns are not supported yet.");
+}
+
 void emit_space(struct operation* op, unsigned char* output_buffer)
 {
 	memset(output_buffer + op->at_pc, 0, op->operands[0]->constval);
@@ -656,6 +756,18 @@ void emit48(unsigned char* dest, uint16_t value1, uint32_t value2)
 	emit32_split(dest+2, (uint16_t)(value2 & 0x0000FFFF), (uint16_t)((value2 >> 16) & 0x0000FFFF)); 
 }
 
+void emit48_vec(unsigned char* dest, uint16_t value1, uint32_t value2)
+{
+	emit16(dest, value1);
+	emit32(dest+2, value2);
+}
+
+void emit80_vec(unsigned char* dest, uint16_t value1, uint32_t value2, uint32_t value3)
+{
+	emit16(dest, value1);
+	emit32(dest+2, value2);
+	emit32(dest+6, value3);
+}
 
 
 
@@ -771,6 +883,16 @@ int getlen_misc(struct operation* op)
     case OP_ADDCMPB:
         return 4;
 	}
+}
+
+int getlen_vecldst(struct operation* op)
+{
+	return 6; /* TODO: 80-bit support */
+}
+
+int getlen_vec(struct operation* op)
+{
+	return 6; /* TODO: 80-bit support */
 }
 
 int getlen_space(struct operation* op)

@@ -45,6 +45,9 @@ genop			mov|cmn|add|bic|mul|eor|sub|and|mvn|ror|cmp|rsb|btst|or|extu|max|bset|mi
 ldstop			ld|st
 ppop			push|pop
 size			b|h|sh
+vecmemsize		b|h|w
+vecrfdir		H|V
+vecrfsize		X|Y
 lrpc			lr|pc
 symfirstchar	{letter}|[_]
 symbolname		{symfirstchar}({symfirstchar}|{digit})*
@@ -77,6 +80,10 @@ symbolname		{symfirstchar}({symfirstchar}|{digit})*
 					return LDSTOPCODE;
 				}
 {ldstop}		{ yylval.integer = str2opcode(yytext) | (COND_ALWAYS << 16) | (SIZE_W << 24); return LDSTOPCODE; }
+vld{vecmemsize}?	{ yylval.integer = str2vecldstopcode(yytext, 0); return VECLDSTOPCODE; }
+vst{vecmemsize}?	{ yylval.integer = str2vecldstopcode(yytext, 1); return VECLDSTOPCODE; }
+{vecrfdir}{vecrfsize}		{ yylval.integer = str2vecop(yytext); return VECOP; }
+{vecrfdir}					{ yylval.integer = str2vecop(yytext); return VECOP; }
 bl				{ 
 					yylval.integer = OP_BL | (COND_ALWAYS << 16);
 					return BLOPCODE;
@@ -131,11 +138,12 @@ cpuid			{ return CPUID; }
                       buffer = realloc(buffer, contentLen+1);
                   yylval.string = buffer; BEGIN 0; return STRING; 
                 }
-<ESCstr>\\.     { error("bogus escape '%s' in string\n", yytext); }
-<ESCstr>\n      { error("newline in string\n"); }
+<ESCstr>\\.     { yyerror("bogus escape '%s' in string\n", yytext); }
+<ESCstr>\n      { yyerror("newline in string\n"); }
 
 \<\<			return LSHIFT;
 \>\>			return RSHIFT;
+\+\=			return PLEQUAL;
 [-,+*/|&^()~\[\]\n]			{ return *yytext; }
 [ \t\r]+		;
 ;.*				;		/* comment */

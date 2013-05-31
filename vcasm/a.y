@@ -16,15 +16,16 @@ int yylex(void);
 }
 
 %token <string> LABEL SYMBOL STRING
-%token <integer> LSHIFT RSHIFT
-%token <integer> GPREG LRPC CPUID
+%token <integer> LSHIFT RSHIFT PLEQUAL
+%token <integer> GPREG LRPC CPUID VECOP
 %token <integer> CONSTANT
-%token <integer> GENOPCODE LDSTOPCODE PPOPCODE BLOPCODE BCHOPCODE ABCOPCODE RTSOPCODE NOPOPCODE LEAOPCODE
+%token <integer> GENOPCODE LDSTOPCODE PPOPCODE BLOPCODE BCHOPCODE ABCOPCODE RTSOPCODE NOPOPCODE LEAOPCODE VECLDSTOPCODE
 %token <integer> DIR_EQU DIR_SPACE DIR_STRING DIR_INTDAT
 
 %type <expr> expr exprnosym
 %type <operand> operand
 %type <operand> ldstoperand gpregoperand lrpcoperand ppoperand
+%type <operand> vecldstoperand vecrfoperand
 %type <operand> intdatlistsingleoperand intdatlist strdat
 %type <symbol> symbol
 %type <symbol> label
@@ -32,7 +33,7 @@ int yylex(void);
 %left '|'
 %left '^'
 %left '&'
-%left LSHIFT RSHIFT
+%left LSHIFT RSHIFT PLEQUAL
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS '~'
@@ -78,6 +79,7 @@ instr:
 	| LDSTOPCODE gpregoperand ',' ldstoperand		{ geninsnldst($1, $2, $4); }
 	| PPOPCODE ppoperand ',' lrpcoperand			{ geninsnpp2($1, $2, $4); }
 	| PPOPCODE ppoperand							{ geninsnpp1($1, $2); }
+	| VECLDSTOPCODE vecrfoperand ',' vecldstoperand		{ geninsnvecldst($1, $2, $4); }
 	;
 	
 gpregoperand:
@@ -99,8 +101,19 @@ ldstoperand:
 	'(' GPREG ')'				{ $$ = (struct operand*)create_ldstoperand_gpreg($2); }
     | '(' GPREG ')'	'+' '+'		{ $$ = (struct operand*)create_ldstoperand_gpreg_inc($2); }
     | '-' '-' '(' GPREG ')'		{ $$ = (struct operand*)create_ldstoperand_gpreg_dec($4); }
-	| expr '(' GPREG ')'	{ $$ = (struct operand*)create_ldstoperand_gpregconstoffset($3, expr_value($1)); }
+	| expr '(' GPREG ')'		{ $$ = (struct operand*)create_ldstoperand_gpregconstoffset($3, expr_value($1)); }
 	| '(' GPREG ',' GPREG ')'	{ $$ = (struct operand*)create_ldstoperand_gpreggpregoffset($2, $4); }
+	;
+	
+vecldstoperand:
+	'(' GPREG ')'										{ $$ = (struct operand*)create_vecldstoperand($2, 0, -1); }
+	| '(' GPREG '+' CONSTANT ')'						{ $$ = (struct operand*)create_vecldstoperand($2, $4, -1); }
+	| '(' GPREG PLEQUAL GPREG ')'						{ $$ = (struct operand*)create_vecldstoperand($2, 0, $4); }
+	| '(' GPREG '+' '(' CONSTANT PLEQUAL GPREG ')' ')'	{ $$ = (struct operand*)create_vecldstoperand($2, $5, $7); }
+	;
+	
+vecrfoperand:
+	VECOP '(' CONSTANT ',' CONSTANT ')'					{ $$ = (struct operand*)create_vecoperand($1, $3, 0, $5, 0); }
 	;
 	
 ppoperand:
@@ -165,5 +178,4 @@ symbol:
 	SYMBOL					{ $$ = (struct symbol*)symbol_parse($1); }
 	;
 %%
-
 

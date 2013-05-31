@@ -209,6 +209,8 @@ enum op_type
 	OPTYPE_LDST,
 	OPTYPE_PUSHPOP,
 	OPTYPE_MISC,
+	OPTYPE_VECLDST,
+	OPTYPE_VEC,
 	OPTYPE_SPACE,
 	OPTYPE_DAT
 };
@@ -227,7 +229,9 @@ enum operand_type
 	OPD_GPREG_RANGE,
 	OPD_LRPC,
 	OPD_INTDAT,
-	OPD_STRDAT
+	OPD_STRDAT,
+	OPD_VECLDST,
+	OPD_VECRF
 };
 
 struct symbol {
@@ -245,6 +249,17 @@ struct operand
 	struct symbol* sym;
 	int constval;
 	char* strval;
+	
+	/* VECTOR SPECIFIC */
+	int vrf_is_scalar;
+	int vrf_is_vertical;
+	int vrf_is_discard;
+	int vrf_bit_size; /* 8, 16, 32 */
+	int vrf_x;
+	int vrf_y;
+	int vrf_xinc;
+	int vrf_yinc;
+	
 	struct operand* list_next;
 };
 
@@ -258,6 +273,12 @@ struct operation
 	int at_pc;
 	int n_operands;
 	struct operand** operands;
+	
+	/* VECTOR SPECIFIC */
+	int vec_rep_count;
+	int vec_bit_size;
+	int vec_is_store;
+	
 	struct list_head list;
 };
 
