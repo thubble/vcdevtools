@@ -20,6 +20,8 @@ struct operand* create_operand_const(int constval);
 struct operand* create_operand_cpuid();
 
 struct operand* create_ldstoperand_gpreg(int gpreg);
+struct operand* create_ldstoperand_gpreg_inc(int gpreg);
+struct operand* create_ldstoperand_gpreg_dec(int gpreg);
 struct operand* create_ldstoperand_gpregconstoffset(int gpreg, int constoffset);
 struct operand* create_ldstoperand_gpreggpregoffset(int gpreg, int gpreg2);
 struct operand* create_vecldstoperand(int gpreg, int constval, int gpreg2);
